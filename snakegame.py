@@ -10,17 +10,22 @@ class SnakeGame:
     def __init__(self, grid, goal):
         """Initialisation."""
         self.grid_size = grid
+        self.init_goal = goal
         self.goal = goal  # Nb de segments a atteindre
         self.snake = self._place_snake_randomly()
 
         self.green_apples = []  # Initialisation temporaire
         self.red_apple = (0, 0)  # Initialisation temporaire
-        self.green_apples = self._place_apples_randomly(2)
-        self.red_apple = self._place_apples_randomly(1)[0]
+        self._reset_apples()
+
+        # self.green_apples = self._place_apples_randomly(2)
+        # self.red_apple = self._place_apples_randomly(1)[0]
+        self.last_seen_apples = self.get_visible_apples()
 
         self.done = False
         self.reward = 0
         self.current_direction = 'haut'
+        self.previous_positions = []
 
     def _place_snake_randomly(self):
         """Place un serpent de 3 segments a une position random."""
@@ -97,6 +102,39 @@ class SnakeGame:
         combined_view = horizontal_view + vertical_view
         return combined_view
 
+    def get_visible_apples(self):
+        """Determine si le serpent a des pommes dans son champ de vision, et a quelle distance."""
+        view = self.get_snake_vision()
+        if view is None: 
+            return False, False, None, None  # Aucune donnee disponible
+
+        head_x, head_y = self.snake[0]
+
+        # Recherche des distances aux pommes
+        green_distances = []
+        red_distances = []
+
+        # On separe la vision horizontale et verticale de la vision du serpent
+        hori_view = view[:self.grid_size]  # partie horizontale
+        vert_view = view[self.grid_size:]  # partie verticale
+
+        # Analyse de la vision horizontale (de gauche a droite)
+        for i, cell in enumerate(hori_view):
+            if cell == 2:  # pomme verte detectee
+                green_distances.append(abs(i - head_x))
+            elif cell == 3:  # pomme rouge detectee
+                red_distances.append(abs(i - head_x))
+
+        # Analyse de la vision verticale (de haut en bas)
+        for j, cell in enumerate(vert_view):
+            if cell == 2:  # pomme verte detectee
+                green_distances.append(abs(j - head_y))
+            elif cell == 3:  # pomme rouge detectee
+                red_distances.append(abs(j - head_y))
+
+        # Retourne True/False et la distance minimale pour chaque pomme
+        return bool(green_distances), bool(red_distances), min(green_distances, default=None), min(red_distances, default=None)
+
     def get_new_direction(self, action):
         """Determine la nouvelle direction en fonction de l'action."""
         directions = ['haut', 'droite', 'bas', 'gauche']
@@ -112,12 +150,13 @@ class SnakeGame:
         """Applique l'action, maj l'etat du jeu, et retourne reward + etat."""
         if len(self.snake) == 0:
             print("Erreur: le serpent est vide. Reinitialisation necessaire.")
-            self.reward -= 10
+            self.reward = -10
             return self.reward, True  # Penalisation et terminaison du jeu
 
-        head_x, head_y = self.snake[0]  # Coordonnees de la tete
+        # Recuperer la distance aux pommes avant le deplacement
+        was_green, was_red, dist_green_before, dist_red_before = self.get_visible_apples()
 
-        # print(f"current head = ({head_x}, {head_y})")
+        head_x, head_y = self.snake[0]  # Coordonnees de la tete
 
         # Calculer la nouvelle direction en fonction de l'action
         self.current_direction = self.get_new_direction(action)
@@ -132,23 +171,23 @@ class SnakeGame:
         elif self.current_direction == 'droite':  # Droite
             new_head = (head_x + 1, head_y)
 
-        # Verifier les collision (serpent et murs)
+        # Verifier les collisions (serpent et murs)
         if new_head in self.snake[1:] or new_head[0] < 0 or new_head[1] < 0 or new_head[0] >= self.grid_size or new_head[1] >= self.grid_size:
             # print(f"Collision avec le mur : {new_head}")
-            self.reward -= 20
+            self.reward = -200
             return self.reward, True  # Collision == grosse punition et fin de partie
 
         # Ajouter la nouvelle tete
         self.snake.insert(0, new_head)
 
-        # Gestion des pommes
+        # Verifier si une pomme est mangee
         if new_head in self.green_apples:
             self.green_apples.remove(new_head)
-            self.reward += 10
+            self.reward = +2000
             new_apple = self._place_apples_randomly(1)[0]
             self.green_apples.append(new_apple)  # Ajoute la nouvelle pomme verte
         elif new_head == self.red_apple:
-            self.reward -= 5
+            self.reward = -100
             self.red_apple = self._place_apples_randomly(1)[0]
             # print(f"On est sur une pomme rouge. snake = {self.snake}")
             # Vérifier que le serpent a au moins deux segments avant de retirer le dernier
@@ -158,38 +197,68 @@ class SnakeGame:
             elif len(self.snake) > 1:
                 self.snake.pop()  # Ne retirer qu'un seul segment si le serpent n'en a qu'un
                 # print(f"On a mange la pomme rouge. Snake = {self.snake}")
-            else:
-                print("Le serpent ne peut pas perdre plus de segments !")
+            if len(self.snake) == 0:
+                self.reward = -100
+                return self.reward, True
         else:
+            # pas de pomme mangee -> on enleve le dernier segment
             self.snake.pop()
-            self.reward -= 1
+
+        self.reward = -2  # Penalite de base pour avancer sans manger
+
+        # if self.snake.count(self.snake[0]) > 5:  # S'il tourne en rond sur la même position
+        #     self.reward -= 50  # Pénaliser les boucles infinies
+
+        # Pour eviter les boucles infinies
+        if new_head in self.previous_positions:
+            self.reward -= 50  # Décourager les boucles
+        self.previous_positions.append(new_head)
+        if len(self.previous_positions) > 10:
+            self.previous_positions.pop(0)  # Garder les derniers déplacements
+
+        # Recuperer la distance aux pommes apres le deplacement
+        is_green, is_red, dist_green_after, dist_red_after = self.get_visible_apples()
+
+        # Recompenser / penaliser selon la distance aux pommes verte
+        if was_green and dist_green_before is not None and dist_green_after is not None:
+            if dist_green_after < dist_green_before:
+                self.reward += 20  # bonus pour s'etre rapprocher
+            elif dist_green_after > dist_green_before:
+                self.reward -= 5  # petite penalite si on s'eloigne
 
         # Gestion de la taille du serpent
         if len(self.snake) >= self.goal:
-            self.reward += 50
+            self.reward = +200
             print(f"Congratulations : you reached a snake size of {self.goal} !")
-            self.goal += 5
+            self.goal += 1
 
         if len(self.snake) == 0:
             print("Your snake is dead ! You lose.")
-            self.reward -= 15
+            self.reward = -100
             return self.reward, True
-
-        # head_x, head_y = new_head
-        # print(f"new head = ({head_x}, {head_y})")
 
         return self.reward, False  # Retourner la recompense et l'indicateur de fin
 
     def reset(self):
         """Reinitialise le jeu avec un placement aleatoire."""
         self.snake = self._place_snake_randomly()
-        self.green_apples = self._place_apples_randomly(2)
-        self.red_apple = self._place_apples_randomly(1)[0]
+        self._reset_apples()
+        self.last_seen_apples = self.get_visible_apples()
+        self.goal = self.init_goal
         self.done = False
         self.reward = 0
-        self.current_direction == 'haut'  # Reinit la direction
+        self.current_direction = 'haut'  # Reinit la direction
+        self.previous_position = []
         return self.get_state()
+
+    def _reset_apples(self):
+        """Reinitialise les pommes aleatoirement."""
+        self.green_apples = self._place_apples_randomly(2)
+        self.red_apple = self._place_apples_randomly(1)[0]
 
     def get_state(self):
         """Retourne l'etat du jeu (positions du serpent et des pommes)."""
         return self.snake, self.green_apples, self.red_apple
+    
+    def get_snake_length(self):
+        return len(self.snake)
