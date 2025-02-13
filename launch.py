@@ -1,13 +1,13 @@
 """Launch program.
 
 Ce programme recupere les arguments optionnels en ligne de commande,
-et lance le programme d'apprentissage. Options: 
+et lance le programme d'apprentissage. Options:
 - taille de la grille (--grid_size)
 - affichage du jeu pendant la phase d'apprentissage (--display)
 - nombre de sessions de jeu (--sessions)
 - delai d'affichage pour lisibilite (--delay)
 - nombre de segments de serpent a atteindre (--goal)
-- commencer a partir de sessions deja crees donc save models / load models (--load)
+- commencer a partir de sessions deja crees: save models / load models (--load)
 A RAJOUTER
 - learn ou don't learn
 - implementer une lifetime
@@ -22,6 +22,8 @@ import matplotlib.pyplot as plt
 from snakegame import SnakeGame
 from agent import QLearningAgent
 from display import draw_game_display, display_snake_vision
+
+MAX_STEPS = 500
 
 
 def close_on_enter(event: any) -> None:
@@ -52,8 +54,14 @@ def pause(DISPLAYSURF, paused=None):
         # Affichage d'un message pendant la pause
         if DISPLAYSURF:
             font = pygame.font.SysFont(None, 36)
-            text = font.render("PAUSE - Appuyer sur ESPACE pour continuer.", True, (255, 255, 255))
-            text_rect = text.get_rect(center=(DISPLAYSURF.get_width() // 2, DISPLAYSURF.get_height() // 2))
+            text = font.render(
+                "PAUSE - Appuyer sur ESPACE pour continuer.",
+                True, (255, 255, 255)
+                )
+            text_rect = text.get_rect(
+                center=(DISPLAYSURF.get_width() // 2,
+                        DISPLAYSURF.get_height() // 2)
+                )
             DISPLAYSURF.blit(text, text_rect)
             pygame.display.flip()
         pygame.time.Clock().tick(10)  # Limite FPS pendant la pause
@@ -67,28 +75,29 @@ def learning_phase(
         grid=None,
         mult=None,
         images=None,
+        display=False,
         num_sessions=None,
         delay=None,
         vision=None,
         play_mode=False
         ) -> tuple:
-    """Phase d'apprentissage du Q-Learning avec affichage optionnel et pause."""
-    paused = False  # variable pour gerer l'etat de pause
+    """Phase d'apprentissage du Q-Learning avec affichage optionnel."""
     reward_total = []
     delay = 100
     timer = []
 
     for session in range(num_sessions):
         state = tuple(game.get_snake_vision())
-        done = False
         session_reward = 0
         session_start = time.time()  # On set un timer
         max_length = game.get_snake_length()
         steps = 0
         game_over = False
+        paused = False  # variable pour gerer l'etat de pause
 
-        while not game_over:
-            paused = pause(DISPLAYSURF, paused)
+        while not game_over and steps < MAX_STEPS:
+            if DISPLAYSURF is not None:
+                paused = pause(DISPLAYSURF, paused)
 
             # Choisir une action via l'agent
             action = agent.get_action(state, play_mode)
@@ -100,7 +109,7 @@ def learning_phase(
             # Observer le nouvel etat
             next_state = tuple(game.get_snake_vision())
 
-            # Maj des Q-values
+            # Maj des Q-values si entrainement actif
             if not play_mode:
                 agent.update(state, action, reward, next_state)
 
@@ -113,32 +122,32 @@ def learning_phase(
 
             steps += 1
 
-            session_end = time.time()
-            session_time = session_end - session_start
             if vision:
                 display_snake_vision(game)
 
-            # Affichage pendant l'apprentissage
-            if DISPLAYSURF is not None and images is not None:
+            # Affichage pendant l'entrainement
+            if DISPLAYSURF is not None and images is not None and display:
                 draw_game_display(DISPLAYSURF, game, grid, mult, images)
                 pygame.display.flip()
                 # paused = not paused
                 # Ajouter un delai pour ralentir l'affichage (en millisecondes)
                 pygame.time.delay(delay)
 
-        # print(agent.q_table)
+        session_end = time.time()
+        session_time = session_end - session_start
         # paused = not paused
-        # Reinitialiser l'env pour la prochaine session
-        game.reset()
+
         reward_total.append(session_reward)
         timer.append(session_time)
         # print(f"session {session}, Recompense totale : {session_reward}")
-        print(f"[Session {session}] Game over. Final length={game.get_snake_length()}, "
-              f"max length={max_length}, total reward={session_reward}, steps={steps}")
+        if max_length >= game.init_goal:
+            print(f"[Session {session}] Game over. "
+                  f"Final length={game.get_snake_length()}, "
+                  f"max length={max_length}, "
+                  f"total reward={session_reward}, steps={steps}")
 
-        # Affichage tous les N sessions
-        # if session % 100 == 0:
-        #     print(f"session {session}/{num_sessions} termine.")
+        # Reinitialiser l'env pour la prochaine session
+        game.reset()
 
         # Reduction progressive d'epsilon apres chaque episode
         if not play_mode:
@@ -187,11 +196,12 @@ def load_agent_state(filename: str) -> QLearningAgent:
         print("\nQuelques entrees de la Q-table: ")
         for i, (state, actions) in enumerate(agent.q_table.items()):
             print(f"Etat: {state} -> Actions: {actions}")
-            if i== 5:  # Affiche seulement les 5 premiers
+            if i == 5:  # Affiche seulement les 5 premiers
                 break
+        print("\n")
         return agent
     except FileNotFoundError:
-        print(f"Fichier {filename} introuvable. Entrainement a partir de zero.")
+        print(f"Fichier {filename} introuvable. Entrainement a partir de 0.")
         return None
 
 
@@ -211,56 +221,64 @@ def Q_Learning_algo(
         load: bool,
         play_mode: bool,
         ) -> None:
-    """Display the board game during training."""
+    """Lance l'apprentissage via Q-Learning, avec ou sans affichage."""
     pygame.init()  # initialize the pygame engine
 
+    # Si mode jeu : forcer une seule session et activer l'affichage
     if play_mode:
         sessions = 1
         display = True
-        # load = "1000000"
 
     # Definition du facteur multiplicateur pour passer de grid a pixel
     mult = calculate_mult_based_on_grid(grid)
     fullgrid = grid + 2  # On ajoute des bords murs pour affichage
     WIN_SIZE = fullgrid * mult
     DISPLAYSURF = None
-
     images = None
 
+    # Creation du jeu
     game = SnakeGame(grid, goal=goal)
 
-    filename = f"agent_state_sessions_{sessions}.pkl"
-
+    # Gestion du chargement d'un agent deja entraine
     if load:
-        # print(f"Chargement de l'etat d'entrainement pour la session {load}.")
-        filename = f"agent_state_sessions_{load}.pkl"
+        load_file = f"agent_state_sessions_{load}.pkl"
+        print(f"Chargement de l'agent depuis {load_file}.")
+        agent = load_agent_state(load_file)
+        if agent is None:
+            print("Echec du chagement, creation d'un nouvel agent.")
+            agent = QLearningAgent(grid, alpha=alpha)
         if not play_mode:
-            sessions = int(load)
-        agent = load_agent_state(filename)
-        if not agent:
-            agent = QLearningAgent(grid, play_mode, alpha=alpha)
+            agent.epsilon = 0.99
     else:
-        print("Pas de session chargee. L'agent demarre a partir de zero.")
-        agent = QLearningAgent(grid, play_mode, alpha=alpha)
+        print("Pas de session chargee. creation d'un nouvel agent.")
+        # print(f"grid = {grid}, play-mode = {play_mode}, alpha = {alpha}")
+        agent = QLearningAgent(grid, alpha=alpha)
+        # print(agent)
 
+    # Definition de l'affichage si active
     if display:
         # Learning phase avec affichage du jeu :
         DISPLAYSURF = pygame.display.set_mode((WIN_SIZE, WIN_SIZE))
         pygame.display.set_caption("Snake Q-Learning Visualization")
         # Charger et redimensionner les images
         images = load_images(mult)
-        reward_total, timer = learning_phase(game, agent, DISPLAYSURF, grid, mult, images, num_sessions=sessions, delay=delay, vision=vision, play_mode=play_mode)
-    else:
-        # Learning phase sans affichage du jeu :
-        reward_total, timer = learning_phase(game, agent, num_sessions=sessions, vision=vision)
+
+    # Phase d'apprentissage / de jeu
+    reward_total, timer = learning_phase(
+        game, agent, DISPLAYSURF, grid, mult, images, display=display,
+        num_sessions=sessions, delay=delay, vision=vision, play_mode=play_mode
+        )
+    # print(f"reward = {reward_total}")
 
     # Sauvegarder l'etat de l'agent
     if not play_mode:
-        save_agent_state(agent, filename)
+        save_file = f"agent_state_sessions_{sessions}.pkl"
+        print(f"Sauvegarde de l'agent dans {save_file}.")
+        save_agent_state(agent, save_file)
 
     pygame.quit()
 
-    print(f"max_duration = {(max(timer) * 1000):.2f} milliseconds")
+    print(f"Temps max d'une session = {(max(timer) * 1000):.2f} ms")
 
     # Tracer l'evolution des recompenses
     if not play_mode:
@@ -275,7 +293,7 @@ def Q_Learning_algo(
 
 def parse_arguments():
     """Recupere tous les arguments optionnels de la ligne de commande."""
-    parser = argparse.ArgumentParser(description="Snake Q-Learning avec options configurables.")
+    parser = argparse.ArgumentParser(description="Snake Q-Learning options.")
     parser.add_argument(
         "--grid_size",
         type=int,
@@ -320,14 +338,14 @@ def parse_arguments():
         "--load",
         nargs='?',  # permet un argument optionnel
         const='1',  # valeur par defaut si l'option est fournie sans valeur
-        choices=['1', '10', '100', '1000', '10000', '50000', '100000', '1000000'],  # limite les choix possibles
+        choices=['1', '10', '100', '1000', '10000', '100000', '1000000'],
         help="Charge un etat d'entrainement (1, 10 ou 100)."
     )
     parser.add_argument(
         "--dontlearn",
         action="store_true",
         help="Jouer avec l'agent sans apprentissage"
-	)
+    )
     return parser.parse_args()
 
 

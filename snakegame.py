@@ -229,8 +229,9 @@ class SnakeGame:
         # Gestion de la taille du serpent
         if len(self.snake) >= self.goal:
             self.reward = +200
-            print(f"Congratulations : you reached a snake size of {self.goal} !")
-            self.goal += 1
+            # print(f"Congratulations : you reached a snake size of {self.goal} !")
+            # self.goal += 1
+            return self.reward, False
 
         if len(self.snake) == 0:
             print("Your snake is dead ! You lose.")
