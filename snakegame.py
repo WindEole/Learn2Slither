@@ -64,6 +64,45 @@ class SnakeGame:
         available_pos = list(all_pos - occupied)
         return random.sample(available_pos, num_apples)
 
+    # def get_snake_vision(self):
+    #     """Donne la vue depuis la tete du serpent sous forme d'un vecteur."""
+    #     if len(self.snake) == 0:
+    #         print("Erreur: le serpent est vide. Reinitialisation necessaire.")
+    #         return
+    #     head_x, head_y = self.snake[0]  # Coordonnees de la tete
+
+    #     # Init une vue vide
+    #     vision_grid = [[0 for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+    #     # Ajouter les elements visibles dans la rangee
+    #     for x, y in self.snake:
+    #         if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+    #             vision_grid[y][x] = 1  # 1 = Serpent
+
+    #     for x, y in self.green_apples:
+    #         if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+    #             vision_grid[y][x] = 2  # 2 = Green Apples
+
+    #     rx, ry = self.red_apple
+    #     if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+    #         vision_grid[ry][rx] = 3  # 3 = Red Apple
+
+    #     # print("Grille vision :")
+    #     # for row in vision_grid:
+    #     #     print(row)
+
+    #     # Vérifiez que head_x et head_y sont valides
+    #     if not (0 <= head_x < self.grid_size and 0 <= head_y < self.grid_size):
+    #         raise ValueError(f"Tête hors des limites : head_x={head_x}, head_y={head_y}")
+
+    #     # Extraire les visions horizontale et verticale
+    #     horizontal_view = [vision_grid[head_y][x] for x in range(self.grid_size)]
+    #     vertical_view = [vision_grid[y][head_x] for y in range(self.grid_size)]
+
+    #     # Combiner les vues pour former un vecteur unique
+    #     combined_view = horizontal_view + vertical_view
+    #     print(f"hori / verti : {combined_view}")
+    #     return combined_view
+
     def get_snake_vision(self):
         """Donne la vue depuis la tete du serpent sous forme d'un vecteur."""
         if len(self.snake) == 0:
@@ -71,36 +110,52 @@ class SnakeGame:
             return
         head_x, head_y = self.snake[0]  # Coordonnees de la tete
 
-        # Init une vue vide
-        vision_grid = [[0 for _ in range(self.grid_size)] for _ in range(self.grid_size)]
-        # Ajouter les elements visibles dans la rangee
-        for x, y in self.snake:
-            if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
-                vision_grid[y][x] = 1  # 1 = Serpent
+        vision = {'up': None, 'right': None, 'down': None, 'left': None}  # Résultat final
+        # Définir les directions de balayage
+        directions = {
+            'up': (0, -1),
+            'right': (1, 0),
+            'down': (0, 1),
+            'left': (-1, 0)
+        }
+        symbols = {  # Symboles pour chaque type d'objet
+            1: 'S',   # Snake proche
+            2: 'G',   # Green Apple
+            3: 'R',   # Red Apple
+            'wall': 'W'
+        }
 
-        for x, y in self.green_apples:
-            if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
-                vision_grid[y][x] = 2  # 2 = Green Apples
+        # Vérifier chaque direction
+        for direction, (dx, dy) in directions.items():
+            distance = 0
+            x, y = head_x, head_y
 
-        rx, ry = self.red_apple
-        if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
-            vision_grid[ry][rx] = 3  # 3 = Red Apple
+            while True:
+                x += dx
+                y += dy
+                distance += 1
 
-        # print("Grille vision :")
-        # for row in vision_grid:
-        #     print(row)
+                if x < 0 or y < 0 or x >= self.grid_size or y >= self.grid_size:
+                    vision[direction] = symbols['wall'] if distance <= 2 else 'w'  # W = proche, w = éloigné
+                    break  # Mur détecté, on arrête le scan
 
-        # Vérifiez que head_x et head_y sont valides
-        if not (0 <= head_x < self.grid_size and 0 <= head_y < self.grid_size):
-            raise ValueError(f"Tête hors des limites : head_x={head_x}, head_y={head_y}")
+                if (x, y) in self.snake:
+                    vision[direction] = 'S' if distance <= 2 else 's'  # S = proche, s = éloigné
+                    break
 
-        # Extraire les visions horizontale et verticale
-        horizontal_view = [vision_grid[head_y][x] for x in range(self.grid_size)]
-        vertical_view = [vision_grid[y][head_x] for y in range(self.grid_size)]
+                if (x, y) in self.green_apples:
+                    vision[direction] = 'G'
+                    break
 
-        # Combiner les vues pour former un vecteur unique
-        combined_view = horizontal_view + vertical_view
-        return combined_view
+                if (x, y) == self.red_apple:
+                    vision[direction] = 'R'
+                    break
+
+        # Retourner la vision sous forme de tuple
+        # snake_view = tuple(vision.values())
+        # print(snake_view)
+        return tuple(vision.values())
+
 
     def get_visible_apples(self):
         """Determine si le serpent a des pommes dans son champ de vision, et a quelle distance."""
@@ -157,6 +212,13 @@ class SnakeGame:
         was_green, was_red, dist_green_before, dist_red_before = self.get_visible_apples()
 
         head_x, head_y = self.snake[0]  # Coordonnees de la tete
+
+        # moves = {
+        #     0: (head_x, head_y - 1), # Haut
+        #     1: (head_x + 1, head_y), # Droite
+        #     2: (head_x, head_y + 1), # Bas
+        #     3: (head_x - 1, head_y), # Gauche
+        # }
 
         # Calculer la nouvelle direction en fonction de l'action
         self.current_direction = self.get_new_direction(action)

@@ -171,9 +171,9 @@ def load_images(mult: int) -> dict:
 def save_agent_state(agent: QLearningAgent, filename: str):
     """Sauvegarde l'etat d'un agent entraine dans un fichier."""
     # A TESTER : on retire les etats ou les valeurs sont tres faibles
-    for state in list(agent.q_table.keys()):
-        if max(agent.q_table[state]) < -100:
-            del agent.q_table[state]
+    # for state in list(agent.q_table.keys()):
+        # if max(agent.q_table[state]) < -100:
+        #     del agent.q_table[state]
     with open(filename, "wb") as file:
         pickle.dump(agent, file)
     print(f"Etat de l'agent sauvegarde dans {filename}.")
@@ -187,17 +187,17 @@ def load_agent_state(filename: str) -> QLearningAgent:
         print(f"Etat de l'agent charge depuis {filename}.")
 
         # AFFICHAGE des attributs de l'agent :
-        print(f"Epsilon: {agent.epsilon}")
         print(f"Alpha: {agent.alpha}")
         print(f"Gamma: {agent.gamma}")
+        print(f"Epsilon: {agent.epsilon}")
         print(f"taille de la Q-table: {len(agent.q_table)} etats enregistres.")
 
         # afficher quelques entrees de la Q-table:
         print("\nQuelques entrees de la Q-table: ")
         for i, (state, actions) in enumerate(agent.q_table.items()):
-            print(f"Etat: {state} -> Actions: {actions}")
-            if i == 5:  # Affiche seulement les 5 premiers
-                break
+            print(f"{i}: {state} -> Actions: {actions}")
+            # if i == 5:  # Affiche seulement les 5 premiers
+            #     break
         print("\n")
         return agent
     except FileNotFoundError:
@@ -338,7 +338,7 @@ def parse_arguments():
         "--load",
         nargs='?',  # permet un argument optionnel
         const='1',  # valeur par defaut si l'option est fournie sans valeur
-        choices=['1', '10', '100', '1000', '10000', '100000', '1000000'],
+        # choices=['1', '10', '100', '1000', '10000', '100000', '1000000'],
         help="Charge un etat d'entrainement (1, 10 ou 100)."
     )
     parser.add_argument(
