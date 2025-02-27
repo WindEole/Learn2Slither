@@ -87,7 +87,7 @@ def learning_phase(
     timer = []
 
     for session in range(num_sessions):
-        state = tuple(game.get_snake_vision())
+        state, _ = tuple(game.get_snake_vision())
         session_reward = 0
         session_start = time.time()  # On set un timer
         max_length = game.get_snake_length()
@@ -107,7 +107,7 @@ def learning_phase(
             session_reward += reward
 
             # Observer le nouvel etat
-            next_state = tuple(game.get_snake_vision())
+            next_state, _ = tuple(game.get_snake_vision())
 
             # Maj des Q-values si entrainement actif
             if not play_mode:
@@ -170,10 +170,6 @@ def load_images(mult: int) -> dict:
 
 def save_agent_state(agent: QLearningAgent, filename: str):
     """Sauvegarde l'etat d'un agent entraine dans un fichier."""
-    # A TESTER : on retire les etats ou les valeurs sont tres faibles
-    # for state in list(agent.q_table.keys()):
-        # if max(agent.q_table[state]) < -100:
-        #     del agent.q_table[state]
     with open(filename, "wb") as file:
         pickle.dump(agent, file)
     print(f"Etat de l'agent sauvegarde dans {filename}.")

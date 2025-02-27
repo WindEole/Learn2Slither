@@ -10,38 +10,89 @@ from pygame.locals import *
 from snakegame import SnakeGame
 
 
+# def display_snake_vision(game: SnakeGame):
+#     """Affiche la vision du serpent sur le terminal."""
+#     # Obtenir la vision du serpent
+#     grid_size = game.grid_size
+#     snake_vision = game.get_snake_vision()
+#     head_x, head_y = game.snake[0]  # position de la tete
+
+#     # Extraire la vue
+#     hori_view = snake_vision[:grid_size]
+#     vert_view = snake_vision[grid_size:]
+
+#     # Remplacer les codes par des symboles
+#     symbol_map = {0: "0", 1: "S", 2: "G", 3: "R"}
+#     hori_view = [symbol_map.get(value, "0") for value in hori_view]
+#     vert_view = [symbol_map.get(value, "0") for value in vert_view]
+
+#     # Remplacer le symbole de la tete de serpent
+#     hori_view[head_x] = "H"
+#     vert_view[head_y] = "H"
+
+#     # Construire la representation visuelle
+#     visual = []
+#     visual.append(" " * (head_x + 1) + "W")  # ligne sup avec mur
+#     for i, sym in enumerate(vert_view):
+#         if i == head_y:
+#             visual.append("W" + "".join(hori_view) + "W")
+#         else:
+#             visual.append(" " * (head_x + 1) + sym)
+#     visual.append(" " * (head_x + 1) + "W")  # ligne inf avec mur
+
+#     # Afficher la vue dans le terminal
+#     print("\n".join(visual))
+
+
 def display_snake_vision(game: SnakeGame):
-    """Affiche la vision du serpent sur le terminal."""
+    """Affiche la vision du serpent sur le terminal, sous forme de boussole."""
     # Obtenir la vision du serpent
-    grid_size = game.grid_size
-    snake_vision = game.get_snake_vision()
-    head_x, head_y = game.snake[0]  # position de la tete
+    vision, distances = game.get_snake_vision()
+    print(vision)
+    print(distances)
 
-    # Extraire la vue
-    hori_view = snake_vision[:grid_size]
-    vert_view = snake_vision[grid_size:]
+    # Vérifie que la vision contient bien 4 éléments
+    if not isinstance(vision, tuple) or len(vision) != 4:
+        print("Erreur : vision mal formattée", vision)
+        return
 
-    # Remplacer les codes par des symboles
-    symbol_map = {0: "0", 1: "S", 2: "G", 3: "R"}
-    hori_view = [symbol_map.get(value, "0") for value in hori_view]
-    vert_view = [symbol_map.get(value, "0") for value in vert_view]
+    # Symboles explicites
+    symbol_map = {
+        "W": "█", "w": "▒",  # Mur (proche ou lointain)
+        "S": "🔶", "s": "🔸",  # Serpent (proche ou lointain)
+        "G": "🍏",           # Pomme verte
+        "R": "🍎",           # Pomme rouge
+        None: " "            # Vide (ne devrait pas arriver)
+    }
 
-    # Remplacer le symbole de la tete de serpent
-    hori_view[head_x] = "H"
-    vert_view[head_y] = "H"
+    # Extraire la lettre du tuple + distance (ex: "G3" -> "G", 3)
+    up, up_dist = symbol_map.get(vision[0], "?"), int(distances[0])
+    right, right_dist = symbol_map.get(vision[1], "?"), int(distances[1])
+    down, down_dist = symbol_map.get(vision[2], "?"), int(distances[2])
+    left, left_dist = symbol_map.get(vision[3], "?"), int(distances[3])
 
-    # Construire la representation visuelle
-    visual = []
-    visual.append(" " * (head_x + 1) + "W")  # ligne sup avec mur
-    for i, sym in enumerate(vert_view):
-        if i == head_y:
-            visual.append("W" + "".join(hori_view) + "W")
-        else:
-            visual.append(" " * (head_x + 1) + sym)
-    visual.append(" " * (head_x + 1) + "W")  # ligne inf avec mur
+    # Affichage type boussole
+    # print(f"""
+    #       {up}
+    #     {left} 🐍 {right})
+    #       {down}
+    #     """)
 
-    # Afficher la vue dans le terminal
-    print("\n".join(visual))
+    # ---- Construction de la boussole proportionnelle ----
+    max_dist = max(up_dist, down_dist, left_dist, right_dist)
+
+    grid = [[" " for _ in range(max_dist * 2 + 3)] for _ in range(max_dist * 2 + 3)]
+    center = max_dist  # Centre du repère pour la tête 🐍
+
+    # Placer les symboles
+    grid[center - up_dist][center] = up
+    grid[center][center + right_dist] = right
+    grid[center + down_dist][center] = down
+    grid[center][center - left_dist] = left
+    grid[center][center] = "🐍"  # Position du serpent
+
+    # ---- Affichage ----
+    print("\n".join("".join(row) for row in grid))
 
 
 def draw_grid(DISPLAYSURF, grid: int, mult: int, line_color=(200, 175, 175)):
